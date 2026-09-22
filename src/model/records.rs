@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use simple_dns::QTYPE;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum RecordType {
@@ -13,6 +14,24 @@ pub enum RecordType {
     PTR,
     MX,
     NAPTR
+}
+
+impl PartialEq<QTYPE> for RecordType {
+	fn eq(&self, other: &QTYPE) -> bool {
+		match other {
+			QTYPE::TYPE(simple_dns::TYPE::A) => *self == RecordType::A,
+			QTYPE::TYPE(simple_dns::TYPE::AAAA) => *self == RecordType::AAAA,
+			QTYPE::TYPE(simple_dns::TYPE::CNAME) => *self == RecordType::CNAME,
+			QTYPE::TYPE(simple_dns::TYPE::TXT) => *self == RecordType::TXT,
+			QTYPE::TYPE(simple_dns::TYPE::SRV) => *self == RecordType::SRV,
+			QTYPE::TYPE(simple_dns::TYPE::NS) => *self == RecordType::NS,
+			QTYPE::TYPE(simple_dns::TYPE::PTR) => *self == RecordType::PTR,
+			QTYPE::TYPE(simple_dns::TYPE::MX) => *self == RecordType::MX,
+			QTYPE::TYPE(simple_dns::TYPE::NAPTR) => *self == RecordType::NAPTR,
+			QTYPE::TYPE(_) => false,
+			_ => false,
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,18 +64,23 @@ pub struct Endpoint {
 	pub provider_specific: Option<ProviderSpecific>,
 }
 
+impl PartialEq for Endpoint {
+	fn eq(&self, other: &Self) -> bool {
+		self.dns_name == other.dns_name && 
+		self.targets == other.targets && 
+		self.record_type == other.record_type
+	}
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct Changes {
 	// Records that need to be created
-	pub create: Option<Records>,
+	pub create: Option<Vec<Endpoint>>,
 	// Records that need to be updated (current data)
-	pub update_old: Option<Records>,
+	pub update_old: Option<Vec<Endpoint>>,
 	// Records that need to be updated (desired data)
-	pub update_new: Option<Records>,
+	pub update_new: Option<Vec<Endpoint>>,
 	// Records that need to be deleted
-	pub delete: Option<Records>,
+	pub delete: Option<Vec<Endpoint>>,
 }
-
-pub type Records = Vec<Endpoint>;
-

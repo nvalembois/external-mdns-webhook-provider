@@ -1,13 +1,12 @@
 use axum::routing::{get, post};
 use clap::Parser;
-use host_webhook_provider::model::config::AppConfig;
+use host_webhook_provider::model::config::WebhookConfig;
 use host_webhook_provider::model::configmap::ConfigMapStore;
 use host_webhook_provider::model::state::AppState;
 use host_webhook_provider::routes::health::get_healthz;
 use host_webhook_provider::routes::records::{get_records, post_adjustendpoints, post_records};
 use host_webhook_provider::routes::root::get_root;
 use axum::Router;
-use kube::Client;
 use tokio::net::TcpListener;
 use tokio::signal;
 use std::process::ExitCode;
@@ -16,7 +15,7 @@ use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let app_config = Arc::new(AppConfig::parse());
+    let app_config = WebhookConfig::parse();
 
     tracing_subscriber::fmt()
         .with_max_level(if app_config.debug {tracing::Level::DEBUG} else { tracing::Level::INFO} )
@@ -27,7 +26,7 @@ async fn main() -> ExitCode {
     info!("Config: regex={}", &app_config.domain_filter.regex);
     info!("Config: regex_exclusion={}", &app_config.domain_filter.regex_exclusion);
     info!("Config: host_configmap_name={}", &app_config.host_configmap_name);
-    info!("Config: host_configmap_namespace={}", app_config.host_configmap_namespace.as_deref().unwrap_or(""));
+    info!("Config: host_configmap_namespace={}", &app_config.host_configmap_namespace);
     info!("Config: host_configmap_key={}", &app_config.host_configmap_key);
     info!("Config: listen_addr={}", &app_config.listen_addr);
     info!("Config: health_listen_addr={}", &app_config.health_listen_addr);
@@ -43,34 +42,29 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run(app_config: Arc<AppConfig>) -> Result<(), String> {
-    let client = Client::try_default().await
-        .map_err(|e| format!("K8S client error : {e}"))?;
-    let namespace = match app_config.host_configmap_namespace.clone() {
-        Some(v) => v,
-        None => client.default_namespace().to_string()
-    };
-    let cm_store = Arc::new(ConfigMapStore::new(
-        client,
-        &namespace,
+async fn run(app_config: WebhookConfig) -> Result<(), String> {
+    let cm_store = ConfigMapStore::new(
+        &app_config.host_configmap_namespace,
         &app_config.host_configmap_name,
         &app_config.host_configmap_key).await
-        
-        .map_err(|e| format!("ConfigMap store init error : {e}"))?);
+        .map_err(|e| format!("ConfigMap store init error : {e}"))?;
         
     // Create `TcpListener` using tokio
     let webhook_listener = TcpListener::bind(app_config.listen_addr.clone()).await
         .map_err(|e| format!("Listen for webhok error : {e}"))?;
     let health_listener = TcpListener::bind(app_config.health_listen_addr.clone()).await
         .map_err(|e| format!("Listen for health error : {e}"))?;
-    
+    let app_state = AppState {
+        app_config: Arc::new(app_config),
+        cm_store: Arc::new(cm_store),
+    };
     // Create `Router`
     let webhook_router = Router::new()
         .route("/records", get(get_records))
         .route("/records", post(post_records))
         .route("/adjustendpoints", post(post_adjustendpoints))
         .route("/", get(get_root))
-        .with_state(AppState{ cm_store, app_config});
+        .with_state(app_state);
     let health_router = Router::new()
         .route("/healthz", get(get_healthz));
 
