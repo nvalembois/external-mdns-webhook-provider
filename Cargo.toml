@@ -1,11 +1,11 @@
 [package]
-name = "host_webhook_provider"
+name = "mdns_webhook_provider"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [[bin]]
-name = "host_webhook_provider"
+name = "webhook_provider"
 path = "src/main.rs"
 
 [[bin]]

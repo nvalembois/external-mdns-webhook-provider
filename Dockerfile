@@ -7,11 +7,11 @@ WORKDIR /tmp
 
 RUN set -e && \
   apk add --no-cache musl-dev build-base && \
-  cargo build --release --bin
+  cargo build --release --bin webhook_provider
 
 FROM scratch
 
-COPY --from=build /tmp/target/release/host_webhook_provider /
+COPY --from=build /tmp/target/release/webhook_provider /
 
 USER 10000
-ENTRYPOINT [ "/host_webhook_provider" ]
+ENTRYPOINT [ "/webhook_provider" ]

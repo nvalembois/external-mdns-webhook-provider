@@ -1,11 +1,11 @@
 use axum::routing::{get, post};
 use clap::Parser;
-use host_webhook_provider::model::config::WebhookConfig;
-use host_webhook_provider::model::configmap::ConfigMapStore;
-use host_webhook_provider::model::state::AppState;
-use host_webhook_provider::routes::health::get_healthz;
-use host_webhook_provider::routes::records::{get_records, post_adjustendpoints, post_records};
-use host_webhook_provider::routes::root::get_root;
+use mdns_webhook_provider::model::config::WebhookConfig;
+use mdns_webhook_provider::model::configmap::ConfigMapStore;
+use mdns_webhook_provider::model::state::AppState;
+use mdns_webhook_provider::routes::health::get_healthz;
+use mdns_webhook_provider::routes::records::{get_records, post_adjustendpoints, post_records};
+use mdns_webhook_provider::routes::root::get_root;
 use axum::Router;
 use tokio::net::TcpListener;
 use tokio::signal;

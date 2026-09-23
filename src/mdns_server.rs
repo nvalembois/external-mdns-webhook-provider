@@ -6,7 +6,7 @@ use simple_dns::{
 use tracing::{debug, error, info};
 use socket2::{Domain, Protocol, Socket, Type as SockType};
 use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, UdpSocket}, process::ExitCode, str::FromStr};
-use host_webhook_provider::model::{config::MDNSConfig, configmap::ConfigMapStore, records::RecordType};
+use mdns_webhook_provider::model::{config::MDNSConfig, configmap::ConfigMapStore, records::RecordType};
 
 const MDNS_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
