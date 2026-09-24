@@ -29,6 +29,7 @@ k8s-openapi = { version = "0", features = ["v1_35"] }
 axum = { version="0", features = ["macros"] }
 simple-dns = "0"
 socket2 = "0"
+notify = "8"
 
 [profile.release]
 opt-level = "z"     # optimise pour la taille (utile pour scratch/distroless)

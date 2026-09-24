@@ -6,7 +6,7 @@ use simple_dns::{
 use tracing::{debug, error, info};
 use socket2::{Domain, Protocol, Socket, Type as SockType};
 use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, UdpSocket}, process::ExitCode, str::FromStr};
-use mdns_webhook_provider::model::{config::MDNSConfig, configmap::ConfigMapStore, records::RecordType};
+use mdns_webhook_provider::model::{config::MDNSConfig, filestore::FileStore, records::RecordType};
 
 const MDNS_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
@@ -22,9 +22,7 @@ async fn main() -> ExitCode {
         .with_max_level(if app_config.debug {tracing::Level::DEBUG} else { tracing::Level::INFO} )
         .init();
 
-    info!("Config: host_configmap_name={}", &app_config.host_configmap_name);
-    info!("Config: host_configmap_namespace={}", &app_config.host_configmap_namespace);
-    info!("Config: host_configmap_key={}", &app_config.host_configmap_key);
+    info!("Config: filestore_path={}", &app_config.filestore_path);
     info!("Config: health_listen_addr={}", &app_config.health_listen_addr);
     info!("Config: debug={}", &app_config.debug);
 
@@ -38,13 +36,11 @@ async fn main() -> ExitCode {
 }
 
 async fn run(app_config: MDNSConfig) -> Result<(), String> {
-    let cm_store = ConfigMapStore::new(
-        &app_config.host_configmap_namespace,
-        &app_config.host_configmap_name,
-        &app_config.host_configmap_key).await
-        .map_err(|e| format!("ConfigMap store init error : {e}"))?;
+    let mut file_store = FileStore::new(
+        &app_config.filestore_path,
+        ).await;
     
-    cm_store.spawn_watcher();
+    file_store.spawn_watcher();
 
     let socket: UdpSocket = create_socket()
         .map_err(|e| format!("Listen on '{MDNS_ADDR}:{MDNS_PORT}' error : {e}"))?;
@@ -74,7 +70,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             continue;
         }
 
-        let Some(response) = build_response(&packet, &cm_store).await else { 
+        let Some(response) = build_response(&packet, &file_store).await else { 
             continue;
         };
 
@@ -94,7 +90,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
 
 /// Construit, si possible, le paquet de réponse mDNS pour une requête donnée.
 /// Retourne `None` si aucune question ne correspond à une entrée connue.
-async fn build_response<'a>(query: &Packet<'a>, cm_store: &ConfigMapStore) -> Option<Packet<'a>> {
+async fn build_response<'a>(query: &Packet<'a>, cm_store: &FileStore) -> Option<Packet<'a>> {
     let mut reply = Packet::new_reply(query.id());
     reply.set_flags(PacketFlag::AUTHORITATIVE_ANSWER);
 

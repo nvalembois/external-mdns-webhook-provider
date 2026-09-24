@@ -107,24 +107,10 @@ pub struct MDNSConfig {
 
     #[arg(
         long,
-        value_name = "HOST_CM_NAME",
-        env = "HOST_CM_NAME",
-        default_value = DEFAULT_HOST_CM_NAME)]
-    pub host_configmap_name: String,
-    
-    #[arg(
-        long,
-        value_name = "HOST_CM_NAMESPACE",
-        env = "HOST_CM_NAMESPACE",
-        default_value = DEFAULT_HOST_CM_NAMESPACE)]
-    pub host_configmap_namespace: String,
-
-    #[arg(
-        long,
-        value_name = "HOST_CM_KEY",
-        env = "HOST_CM_KEY",
-        default_value = DEFAULT_HOST_CM_KEY)]
-    pub host_configmap_key: String,
+        value_name = "FILESTORE_PATH",
+        env = "FILESTORE_PATH",
+        default_value = "/data/records")]
+    pub filestore_path: String,
    
     #[arg(
         long,
