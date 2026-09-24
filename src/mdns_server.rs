@@ -108,6 +108,7 @@ async fn build_response<'a>(query: &Packet<'a>, cm_store: &FileStore) -> Option<
             QTYPE::TYPE(TYPE::AAAA) => RecordType::AAAA,
             _ => continue,
         };
+        debug!("received query {} {}", match wanted_type { RecordType::A=> "A", RecordType::AAAA=>"AAAA",_=> "??" }, question.qname.to_string().to_lowercase());
 
         let ips = cm_store.query(question).await;
         for ip in ips {
