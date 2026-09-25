@@ -1,11 +1,11 @@
 
 use clap::Parser;
 use simple_dns::{
-    rdata::RData, Packet, PacketFlag, QTYPE, ResourceRecord, CLASS, TYPE,
+    CLASS, Packet, PacketFlag, QTYPE, Question, ResourceRecord, TYPE, rdata::RData,
 };
 use tracing::{debug, error, info};
 use socket2::{Domain, Protocol, Socket, Type as SockType};
-use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, UdpSocket}, process::ExitCode, str::FromStr};
+use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, UdpSocket}, process::ExitCode, str::FromStr, sync::Arc};
 use mdns_webhook_provider::model::{config::MDNSConfig, filestore::FileStore, records::RecordType};
 
 const MDNS_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -41,16 +41,17 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
         ).await;
     
     file_store.spawn_watcher();
+    let file_store = Arc::new(file_store);
 
-    let socket: UdpSocket = create_socket()
+    let socket= create_socket()
         .map_err(|e| format!("Listen on '{MDNS_ADDR}:{MDNS_PORT}' error : {e}"))?;
+    let socket = Arc::new(socket);
     info!(
         "Serveur mDNS (requêtes de type host uniquement) à l'écoute sur {MDNS_ADDR}:{MDNS_PORT}"
     );
-
-    let mut buf = [0u8; 4096];
-
+    
     loop {
+        let mut buf = [0u8; 4096];
         let (len, src) = match socket.recv_from(&mut buf) {
             Ok(v) => v,
             Err(e) => {
@@ -59,47 +60,66 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             }
         };
 
-        let packet = match Packet::parse(&buf[..len]) {
-            Ok(p) => p,
-            Err(_) => continue, // paquet non-DNS ou malformé : on ignore
-        };
-
-        // On ignore tout ce qui n'est pas une requête (les réponses des
-        // autres participants mDNS, notamment).
-        if packet.has_flags(PacketFlag::RESPONSE) {
-            continue;
-        }
-
-        let Some(response) = build_response(&packet, &file_store).await else { 
-            continue;
-        };
-
-        match response.build_bytes_vec_compressed() {
-            Ok(bytes) => match socket.send_to(&bytes, src) {
-                Ok(_) => {
-                    for q in &response.questions {
-                        debug!("Réponse envoyée pour « {} » à {src}", q.qname);
-                    }
-                }
-                Err(e) => error!("Erreur d'envoi de la réponse : {e}"),
-            },
-            Err(e) => error!("Erreur de construction de la réponse : {e}"),
-        }
+        let socket = socket.clone();
+        let file_store = file_store.clone();
+        tokio::spawn(async move {
+            let packet = match Packet::parse(&buf[..len]) {
+                Ok(p) => p,
+                Err(e) => {
+                    debug!("Ignore malformed mdns query : {e}");
+                    return;
+                },
+            };
+            if packet.has_flags(PacketFlag::RESPONSE) {
+                return;
+            } 
+            process_mdns_request(file_store, src, packet, socket).await;
+        });
     }
 }
 
-/// Construit, si possible, le paquet de réponse mDNS pour une requête donnée.
+async fn process_mdns_request(file_store: Arc<FileStore>, src: std::net::SocketAddr, packet: Packet<'_>, socket: Arc<UdpSocket>) {
+
+    let unicast_questions = packet.questions.iter().filter(|q| q.unicast_response).collect();
+    if let Some(response) = build_response(packet.id(), unicast_questions, &file_store).await { 
+        send_mdns_response(src, &socket, response);
+    };
+    let multicast_questions = packet.questions.iter().filter(|q| !q.unicast_response).collect();
+    if let Some(response) = build_response(packet.id(), multicast_questions, &file_store).await { 
+        send_mdns_response(SocketAddr::new(std::net::IpAddr::V4(MDNS_ADDR), MDNS_PORT), &socket, response);
+    };
+}
+
+fn send_mdns_response(dst: std::net::SocketAddr, socket: &Arc<UdpSocket>, response: Packet<'_>) {
+    match response.build_bytes_vec_compressed() {
+        Ok(bytes) => match socket.send_to(&bytes, dst) {
+            Ok(_) => {
+                for q in &response.questions {
+                    debug!("Réponse envoyée pour « {} » à {dst}", q.qname);
+                }
+            }
+            Err(e) => error!("Erreur d'envoi de la réponse : {e}"),
+        },
+        Err(e) => error!("Erreur de construction de la réponse : {e}"),
+    }
+}
+
+/// Construit, si possible, le paquet de réponse mDNS pour un ensemble de questions données.
 /// Retourne `None` si aucune question ne correspond à une entrée connue.
-async fn build_response<'a>(query: &Packet<'a>, cm_store: &FileStore) -> Option<Packet<'a>> {
-    let mut reply = Packet::new_reply(query.id());
+async fn build_response<'a>(
+    query_id: u16,
+    questions: Vec<&Question<'a>>,
+    cm_store: &Arc<FileStore>
+) -> Option<Packet<'a>> {
+    let mut reply = Packet::new_reply(query_id);
     reply.set_flags(PacketFlag::AUTHORITATIVE_ANSWER);
 
     // return eraly to avoid locking cache
-    if query.questions.is_empty() {
+    if questions.is_empty() {
         return None
     }
     
-    for question in &query.questions {
+    for question in questions {
         // On ne traite QUE les questions de type "host" (A / AAAA) : les
         // requêtes de découverte de service (PTR, SRV, TXT, ANY, ...) sont
         // silencieusement ignorées.
