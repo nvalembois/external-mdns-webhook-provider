@@ -111,11 +111,11 @@ pub struct MDNSConfig {
         env = "FILESTORE_PATH",
         default_value = "/data/records")]
     pub filestore_path: String,
-   
+
     #[arg(
         long,
-        value_name = "HEALTH_LISTEN_ADDR",
-        env = "HEALTH_LISTEN_ADDR",
-        default_value = "0.0.0.0:8080")]
-    pub health_listen_addr: String,
+        value_name = "GRACEFULL_SHUTDOWN_TIMEOUT",
+        env = "GRACEFULL_SHUTDOWN_TIMEOUT",
+        default_value_t = 60)]
+    pub gracefull_shutdown_timeout: u64,
 }
