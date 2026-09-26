@@ -73,9 +73,10 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                 break;
             }
 
-            res = socket.recv_from(&mut buf) => {
+            res = (*socket).recv_from(&mut buf) => {
                 match res {
                     Ok((len, src)) => {
+                        debug!("received packet of len {len}");
                         let socket = socket.clone();
                         let file_store = file_store.clone();
                         let data = buf[..len].to_vec();
@@ -102,9 +103,10 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
 
             // Réclame (drain) les tâches déjà terminées au fil de l'eau.
             Some(res) = join_set.join_next(), if !join_set.is_empty() => {
-                if let Err(e) = res {
-                    error!("Une tâche a paniqué ou a été annulée: {}", e);
-                }
+                match res {
+                    Ok(_) => debug!("a task ended"),
+                    Err(e) => error!("a task pannicked or failed : {e}"),
+                };
             }
         }
     }
