@@ -69,7 +69,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             biased;
  
             _ = &mut shutdown => {
-                println!("\nArrêt demandé : on cesse d'accepter de nouvelles requêtes.");
+                info!("\nArrêt demandé : on cesse d'accepter de nouvelles requêtes.");
                 break;
             }
 
@@ -95,25 +95,21 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Erreur de réception: {}", e);
+                        error!("Erreur de réception: {}", e);
                     }
                 }
             }
 
             // Réclame (drain) les tâches déjà terminées au fil de l'eau.
-            // Sans cette branche, le JoinSet accumulerait indéfiniment les
-            // résultats des tâches finies, jamais libérés avant le shutdown.
-            // Le garde `if !join_set.is_empty()` évite de "spinner" sur un
-            // JoinSet vide (join_next() sur un set vide renverrait None en
-            // boucle).
             Some(res) = join_set.join_next(), if !join_set.is_empty() => {
                 if let Err(e) = res {
-                    eprintln!("Une tâche a paniqué ou a été annulée: {}", e);
+                    error!("Une tâche a paniqué ou a été annulée: {}", e);
                 }
             }
         }
     }
     gracefull_shutdown(join_set, Duration::from_secs(app_config.gracefull_shutdown_timeout)).await;
+    close_socket(socket);
     info!("Shutdown completed.");
     Ok(())
 }
@@ -221,6 +217,14 @@ fn create_socket() -> std::io::Result<UdpSocket> {
     let std_socket: std::net::UdpSocket = socket.into();
     UdpSocket::from_std(std_socket)
 }
+
+fn close_socket(socket: Arc<UdpSocket>) {
+    if let Err(e) = socket.leave_multicast_v4( MDNS_ADDR, Ipv4Addr::UNSPECIFIED) {
+        error!("Error leaving multicast : {e}");
+    }
+    drop(socket);
+}
+
 
 // /// Crée et configure le socket UDP multicast IPv4 sur le port mDNS standard.
 // fn create_socket() -> std::io::Result<UdpSocket> {
