@@ -37,11 +37,7 @@ async fn main() -> ExitCode {
 }
 
 async fn run(app_config: MDNSConfig) -> Result<(), String> {
-    let mut file_store = FileStore::new(
-        &app_config.filestore_path,
-        ).await;
-    
-    file_store.spawn_watcher();
+    let file_store = FileStore::new(&app_config.filestore_path).await;
     let file_store = Arc::new(file_store);
 
     let socket= create_socket()
@@ -69,7 +65,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             biased;
  
             _ = &mut shutdown => {
-                info!("\nArrêt demandé : on cesse d'accepter de nouvelles requêtes.");
+                info!("Arrêt demandé : on cesse d'accepter de nouvelles requêtes.");
                 break;
             }
 
@@ -133,7 +129,7 @@ async fn send_mdns_response(dst: std::net::SocketAddr, socket: &Arc<UdpSocket>, 
         Ok(bytes) => match socket.send_to(&bytes, dst).await {
             Ok(_) => {
                 for q in &response.questions {
-                    debug!("Réponse envoyée pour « {} » à {dst}", q.qname);
+                    info!("Réponse envoyée pour « {} » à {dst}", q.qname);
                 }
             }
             Err(e) => error!("Erreur d'envoi de la réponse : {e}"),
@@ -265,8 +261,8 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
  
     tokio::select! {
-        _ = ctrl_c => println!("Signal Ctrl+C reçu"),
-        _ = terminate => println!("Signal SIGTERM reçu"),
+        _ = ctrl_c => info!("Signal Ctrl+C reçu"),
+        _ = terminate => info!("Signal SIGTERM reçu"),
     }
 }
 
@@ -275,11 +271,11 @@ async fn shutdown_signal() {
 async fn gracefull_shutdown(mut join_set: JoinSet<()>, timeout: Duration) {
     let in_flight = join_set.len();
     if in_flight == 0 {
-        println!("Aucune tâche en cours.");
+        info!("Aucune tâche en cours.");
         return;
     }
  
-    println!(
+    info!(
         "Attente de {} tâche(s) en cours (max {}s)...",
         in_flight,
         timeout.as_secs()
@@ -288,16 +284,16 @@ async fn gracefull_shutdown(mut join_set: JoinSet<()>, timeout: Duration) {
     let drain = async {
         while let Some(result) = join_set.join_next().await {
             if let Err(e) = result {
-                eprintln!("Une tâche a paniqué ou a été annulée: {}", e);
+                error!("Une tâche a paniqué ou a été annulée: {}", e);
             }
         }
     };
  
     match tokio::time::timeout(timeout, drain).await {
-        Ok(()) => println!("Toutes les tâches en cours se sont terminées normalement."),
+        Ok(()) => info!("Toutes les tâches en cours se sont terminées normalement."),
         Err(_) => {
             let remaining = join_set.len();
-            eprintln!(
+            error!(
                 "Timeout atteint : {} tâche(s) encore active(s), arrêt forcé.",
                 remaining
             );

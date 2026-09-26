@@ -11,7 +11,6 @@ use crate::model::records::Endpoint;
 
 #[derive(Clone)]
 pub struct FileStore {
-    path: String,
     cache: Arc<RwLock<Vec<Endpoint>>>,
 }
 
@@ -20,59 +19,12 @@ impl FileStore {
     pub async fn new(path: &str) -> Self {
         let mut cache = Arc::new(RwLock::new(vec![]));
         read(path, &mut cache).await;
+        spawn_watcher(String::from(path), &mut cache);
         Self {
-            path: String::from(path),
             cache: cache,
         }
     }
 
-    /// Démarre une tâche de fond qui scrute la ConfigMap et met à jour le cache
-    /// dès qu'un changement de la clé `records` est détecté côté cluster.
-    pub fn spawn_watcher(&mut self) {
-        let path = self.path.clone();
-        let mut cache = self.cache.clone();
-        
-        tokio::spawn(async move {
-            let mut watcher: notify::INotifyWatcher;
-            let mut rx: Receiver<Result<Event, notify::Error>>;
-            loop {
-                let tx: Sender<Result<Event, notify::Error>>;
-                (tx, rx) = mpsc::channel::<notify::Result<Event>>();
-                watcher = match notify::recommended_watcher(tx) {
-                    Ok(i) => i,
-                    Err(e) => {
-                        error!("Failed to start watcher {e}");
-                        continue
-                    },
-                };
-                match watcher.watch(Path::new(&path), RecursiveMode::NonRecursive) {
-                    Ok(_) => break,
-                    Err(e) => error!("Failed to start watching {path} : {e}"),
-                }
-                sleep(Duration::from_secs(1)).await;
-            }
-
-            loop {
-                let event = match rx.recv() {
-                    Ok(Ok(e)) => e,
-                    Ok(Err(e)) => {
-                        error!("receive notify event error : {e}");
-                        continue;
-                    },
-                    Err(e) => {
-                        error!("error receiving notify event : {e}");
-                        continue;
-                    },
-                };
-                match event.kind {
-                    // notify::EventKind::Create(_) => read(&path, &mut cache).await,
-                    notify::EventKind::Modify(_) => read(&path, &mut cache).await,
-                    notify::EventKind::Remove(_) => *cache.write().await =vec![],
-                    _ => {},
-                };
-            }
-        });
-    }    
     
     pub async fn query<'a>(&self, question: &Question<'a>) -> Vec<String> {
         let records = self.cache.read().await;
@@ -103,3 +55,50 @@ async fn read(path: &str, cache: &mut Arc<RwLock<Vec<Endpoint>>>) {
     info!("loaded data from {path} and found {} records", records.capacity());
     *cache.write().await = records;
 }
+
+/// Démarre une tâche de fond qui scrute la ConfigMap et met à jour le cache
+/// dès qu'un changement de la clé `records` est détecté côté cluster.
+fn spawn_watcher(path: String, cache: &mut Arc<RwLock<Vec<Endpoint>>>) {
+    let mut cache= cache.clone();
+    
+    tokio::spawn(async move {
+        let mut watcher: notify::INotifyWatcher;
+        let mut rx: Receiver<Result<Event, notify::Error>>;
+        loop {
+            let tx: Sender<Result<Event, notify::Error>>;
+            (tx, rx) = mpsc::channel::<notify::Result<Event>>();
+            watcher = match notify::recommended_watcher(tx) {
+                Ok(i) => i,
+                Err(e) => {
+                    error!("Failed to start watcher {e}");
+                    continue
+                },
+            };
+            match watcher.watch(Path::new(&path), RecursiveMode::Recursive) {
+                Ok(_) => break,
+                Err(e) => error!("Failed to start watching {path} : {e}"),
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        loop {
+            let event = match rx.recv() {
+                Ok(Ok(e)) => e,
+                Ok(Err(e)) => {
+                    error!("receive notify event error : {e}");
+                    continue;
+                },
+                Err(e) => {
+                    error!("error receiving notify event : {e}");
+                    continue;
+                },
+            };
+            match event.kind {
+                // notify::EventKind::Create(_) => read(&path, &mut cache).await,
+                notify::EventKind::Modify(_) => read(&path, &mut cache).await,
+                notify::EventKind::Remove(_) => *cache.write().await =vec![],
+                _ => {},
+            };
+        }
+    });
+}    
