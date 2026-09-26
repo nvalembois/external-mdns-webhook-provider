@@ -23,7 +23,7 @@ async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_max_level(if app_config.debug {tracing::Level::DEBUG} else { tracing::Level::INFO} )
         .init();
-
+    info!("Starting {} v{}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION"));
     info!("Config: filestore_path={}", &app_config.filestore_path);
     info!("Config: debug={}", &app_config.debug);
 
