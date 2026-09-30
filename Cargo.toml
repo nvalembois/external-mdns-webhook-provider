@@ -30,6 +30,8 @@ axum = { version="0", features = ["macros"] }
 simple-dns = "0"
 socket2 = "0"
 notify = "8"
+use = "0.0.1-pre.0"
+tokio-util = "0"
 
 [profile.release]
 opt-level = "z"     # optimise pour la taille (utile pour scratch/distroless)

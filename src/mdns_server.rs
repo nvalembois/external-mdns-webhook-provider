@@ -1,5 +1,7 @@
 
 use clap::Parser;
+use mdns_webhook_provider::model::watcher::FileEvent::{Create, Modify, Remove};
+use mdns_webhook_provider::model::watcher::FileWatcher;
 use simple_dns::{
     CLASS, Packet, PacketFlag, QTYPE, Question, ResourceRecord, TYPE, rdata::RData,
 };
@@ -37,7 +39,7 @@ async fn main() -> ExitCode {
 }
 
 async fn run(app_config: MDNSConfig) -> Result<(), String> {
-    let file_store = FileStore::new(&app_config.filestore_path).await;
+    let file_store = FileStore::new(&app_config.filestore_path).await;    
     let file_store = Arc::new(file_store);
 
     let socket= create_socket()
@@ -47,10 +49,11 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
         "Serveur mDNS (requêtes de type host uniquement) à l'écoute sur {MDNS_ADDR}:{MDNS_PORT}"
     );
 
-    // Garde la trace de toutes les tâches lancées, pour pouvoir les
-    // attendre (ou les annuler) proprement lors du shutdown.
+    let (mut file_watcher, watcher_handle) = FileWatcher::new(&app_config.filestore_path).await;
+
     let mut join_set: JoinSet<()> = JoinSet::new();
- 
+    join_set.spawn(async move { let _ = watcher_handle.await; });
+
     // Future de shutdown "épinglée" une seule fois pour être réutilisée
     // à chaque itération du select! sans se reconstruire.
     let shutdown = shutdown_signal();
@@ -97,6 +100,15 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                 }
             }
 
+            res = file_watcher.recv(), if file_watcher.running() => {
+                match res {
+                    Some(Create) => { debug!("filestore created"); file_store.refresh().await },
+                    Some(Modify) => { debug!("filestore modified"); file_store.refresh().await },
+                    Some(Remove) => { debug!("filestore removed"); file_store.clear().await },
+                    None => {},
+                };
+            }
+
             // Réclame (drain) les tâches déjà terminées au fil de l'eau.
             Some(res) = join_set.join_next(), if !join_set.is_empty() => {
                 match res {
@@ -106,6 +118,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             }
         }
     }
+    file_watcher.shutdown();
     gracefull_shutdown(join_set, Duration::from_secs(app_config.gracefull_shutdown_timeout)).await;
     close_socket(socket);
     info!("Shutdown completed.");
