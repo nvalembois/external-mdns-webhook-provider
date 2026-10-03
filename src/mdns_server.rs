@@ -67,11 +67,13 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
             // accepter une nouvelle requête juste après avoir reçu le signal.
             biased;
  
+            // interruption sur signal de fin reçu
             _ = &mut shutdown => {
                 info!("Arrêt demandé : on cesse d'accepter de nouvelles requêtes.");
                 break;
             }
 
+            // traitement de la réception d'un paquet réseau
             res = (*socket).recv_from(&mut buf) => {
                 match res {
                     Ok((len, src)) => {
@@ -100,6 +102,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                 }
             }
 
+            // traitement d'un événement sur le fichier
             res = file_watcher.recv(), if file_watcher.running() => {
                 match res {
                     Some(Create) => { info!("filestore created"); file_store.refresh().await },
@@ -109,7 +112,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                 };
             }
 
-            // Réclame (drain) les tâches déjà terminées au fil de l'eau.
+            // traitement des événements de fin de tâche de fond
             Some(res) = join_set.join_next(), if !join_set.is_empty() => {
                 match res {
                     Ok(_) => debug!("a task ended"),

@@ -1,6 +1,6 @@
 
 use simple_dns::Question;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 use std::sync::Arc;
 use std::fs::File;
 use tokio::sync::RwLock;
@@ -36,6 +36,17 @@ impl FileStore {
     }
 
     pub async fn refresh(&self) {
+        match fs::metadata(self.path.as_str()) {
+            Ok(m) if 0 == m.len() => {
+                info!("ignore reading empty file");
+                return ;
+            },
+            Err(e) => {
+                error!("error getting file stat for'{0}' : {e}", self.path);
+                return ;
+            },
+            Ok(_) => {},
+        };
         let file = match File::open(PathBuf::from(self.path.as_str())) {
             Ok(f) => f,
             Err(e) => {
