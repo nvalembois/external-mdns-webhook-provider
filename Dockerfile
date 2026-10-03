@@ -17,13 +17,13 @@ RUN addgroup -S -g $GROUP_ID $GROUP_NAME \
 COPY Cargo.toml Cargo.lock /tmp/
 COPY src /tmp/src/
 RUN apk add --no-cache musl-dev build-base && \
-    cargo build --release --bin webhook_provider && \
-    mv target/release/webhook_provider . && \
+    cargo build --release --bins && \
+    mv target/release/webhook_provider target/release/mdns_server . && \
     cargo clean && \
     apk del --no-cache -r musl-dev build-base
 
 # distroless image
-FROM scratch
+FROM scratch AS webhook_provider
 
 COPY --from=build /etc/passwd /etc/shadow /etc/group /etc/
 COPY --from=build /tmp/webhook_provider /
@@ -32,3 +32,13 @@ ARG USER_ID
 USER $USER_ID
 
 ENTRYPOINT [ "/webhook_provider" ]
+
+FROM scratch AS mdns_server
+
+COPY --from=build /etc/passwd /etc/shadow /etc/group /etc/
+COPY --from=build /tmp/mdns_server /
+
+ARG USER_ID
+USER $USER_ID
+
+ENTRYPOINT [ "/mdns_server" ]
