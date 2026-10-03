@@ -4,7 +4,7 @@ ARG GROUP_ID=1000
 ARG GROUP_NAME=mdns
 
 # build stage
-FROM docker.io/library/rust:1.94.1-alpine3.20 AS build
+FROM docker.io/library/rust:1.94.1-alpine AS build
 
 WORKDIR /tmp
 
@@ -20,10 +20,6 @@ RUN apk add --no-cache musl-dev build-base && \
     mv target/release/mdns_server . && \
     cargo clean && \
     apk del --no-cache -r musl-dev build-base
-
-RUN apk add --no-cache libcap && \
-    setcap 'cap_net_bind_service=+ep cap_net_raw=+ep' /tmp/mdns_server && \
-    apk del --no-cache -r libcap
 
 # distroless image
 FROM scratch
