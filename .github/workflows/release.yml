@@ -44,9 +44,6 @@ jobs:
           name: Release ${{ github.repository }} ${{ steps.tag.outputs.new_tag }}
           body: ${{ steps.tag.outputs.new_tag }}
       - 
-        name: Checkout
-        uses: actions/checkout@v7
-      - 
         name: Set up QEMU
         uses: docker/setup-qemu-action@v4  # https://github.com/docker/setup-qemu-action
       - 
@@ -66,14 +63,14 @@ jobs:
         with:
           images: ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}
       - 
-        name: Build and push ${{ github.repository }}:${{ steps.tag_version.outputs.new_tag }} (${{ github.ref_name }})
+        name: Build and push ${{ github.repository }}:${{ steps.tag.outputs.new_tag }} (${{ github.ref_name }})
         uses: docker/build-push-action@v7  # https://github.com/docker/build-push-action
         with:
           push: true
           platforms: linux/amd64
           tags: |
             ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}:${{ github.ref_name }}
-            ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}:${{ steps.tag_version.outputs.new_tag }}
+            ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}:${{ steps.tag.outputs.new_tag }}
           annotations: ${{ steps.metadata.outputs.annotations }}
           labels: ${{ steps.metadata.outputs.labels }}
           sbom: true
@@ -86,7 +83,7 @@ jobs:
         with:
           images: ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}-mdns
       - 
-        name: Build and push ${{ github.repository }}-mdns:${{ steps.tag_version.outputs.new_tag }} (${{ github.ref_name }})
+        name: Build and push ${{ github.repository }}-mdns:${{ steps.tag.outputs.new_tag }} (${{ github.ref_name }})
         uses: docker/build-push-action@v7  # https://github.com/docker/build-push-action
         with:
           push: true
@@ -95,7 +92,7 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}-mdns:${{ github.ref_name }}
-            ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}-mdns:${{ steps.tag_version.outputs.new_tag }}
+            ${{ env.DOCKER_REPOSITORY }}/${{ github.repository }}-mdns:${{ steps.tag.outputs.new_tag }}
           annotations: ${{ steps.metadata-mdns.outputs.annotations }}
           labels: ${{ steps.metadata-mdns.outputs.labels }}
           sbom: true
