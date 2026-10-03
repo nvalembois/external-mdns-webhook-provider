@@ -5,7 +5,7 @@ ARG GROUP_ID=1000
 ARG GROUP_NAME=webhook
 
 # build stage
-FROM docker.io/library/rust:1.94.1-alpine AS build
+FROM docker.io/library/rust:1.99.0-alpine AS build
 
 WORKDIR /tmp
 
