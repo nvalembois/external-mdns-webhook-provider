@@ -104,7 +104,7 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
                 match res {
                     Some(Create) => { info!("filestore created"); file_store.refresh().await },
                     Some(Modify) => { info!("filestore modified"); file_store.refresh().await },
-                    Some(Remove) => { info!("filestore removed"); file_store.clear().await },
+                    Some(Remove) => { debug!("ignore filestore removed"); }, // file_store.clear().await },
                     None => {},
                 };
             }
