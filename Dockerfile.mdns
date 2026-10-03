@@ -21,10 +21,6 @@ RUN apk add --no-cache musl-dev build-base && \
     cargo clean && \
     apk del --no-cache -r musl-dev build-base
 
-# RUN apk add --no-cache libcap && \
-#     setcap 'cap_net_bind_service=+ep cap_net_raw=+ep' /tmp/mdns_server && \
-#     apk del --no-cache -r libcap
-
 # distroless image
 FROM scratch
 
