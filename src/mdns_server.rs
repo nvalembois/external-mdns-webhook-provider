@@ -102,9 +102,9 @@ async fn run(app_config: MDNSConfig) -> Result<(), String> {
 
             res = file_watcher.recv(), if file_watcher.running() => {
                 match res {
-                    Some(Create) => { debug!("filestore created"); file_store.refresh().await },
-                    Some(Modify) => { debug!("filestore modified"); file_store.refresh().await },
-                    Some(Remove) => { debug!("filestore removed"); file_store.clear().await },
+                    Some(Create) => { info!("filestore created"); file_store.refresh().await },
+                    Some(Modify) => { info!("filestore modified"); file_store.refresh().await },
+                    Some(Remove) => { info!("filestore removed"); file_store.clear().await },
                     None => {},
                 };
             }
